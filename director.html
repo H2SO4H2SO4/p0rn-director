@@ -1,0 +1,55 @@
+<!-- You might want to add additional HTML elements to ST.
+    It's good practice to separate it out from your code -->
+
+<script lang="javascript" src="https://cdn.jsdelivr.net/npm/buttplug@3.0.0/dist/web/buttplug.min.js">
+</script>
+
+<div class="example-extension-settings">
+	<div class="inline-drawer">
+
+
+		<div class="inline-drawer-toggle inline-drawer-header">
+			<b>P0rn Director NSFW</b>
+			<div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+		</div>
+		<div class="inline-drawer-content">
+			<div class="example-extension_block flex-container">
+				<input id="enabled_setting" type="checkbox" />
+				<label for="enabled_setting">Enabled</label>
+			</div>
+
+			<div class="example-extension_block flex-container">
+				<label for="porn_duration">Duration <span id="porn_duration_value"></span> minutes</label>
+				<input id="porn_duration" type="range" min="10" max="480" step="10" value="{{max_duration}}" />
+			</div>
+
+			<div class="example-extension_block flex-container">
+				<label for="porn_editor_select">Movie Script</label>
+				<select id="porn_editor_select" class="margin0">
+				</select>
+			</div>
+
+			<div class="example-extension_block flex-container">
+				<label for="porn_editor_first_words" id="joi_magic_words4_label">Author's Note starts with these
+					words</label>
+
+				<textarea rows="3" class="text_pole textarea_compact" id="porn_editor_first_words"
+					style="height: 32px;">{{first_words}}</textarea>
+			</div>
+
+			<div class="example-extension_block flex-container">
+				<label for="porn_editor_opening">Opening Scene</label>
+				<select id="porn_editor_opening" class="margin0">
+				</select>
+			</div>
+
+			<div class="example-extension_block flex-container">
+				<label for="porn_editor_closing">Closing Scene</label>
+				<select id="porn_editor_closing" class="margin0">
+				</select>
+			</div>
+
+			<hr class="sysHR" />
+		</div>
+	</div>
+</div>
