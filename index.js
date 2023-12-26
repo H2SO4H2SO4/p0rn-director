@@ -2,7 +2,13 @@
 import { doExtrasFetch, extension_settings, getApiUrl, getContext, modules } from "../../../extensions.js";
 import { eventSource, event_types, getRequestHeaders, saveSettingsDebounced, substituteParams, chat_metadata } from "../../../../script.js";
 import { world_names } from "../../../world-info.js";
-import { executeSlashCommands } from '../../../slash-commands.js';
+import { executeSlashCommands, registerSlashCommand } from '../../../slash-commands.js';
+import { ElevenLabsTtsProvider } from '../../tts/elevenlabs.js'
+import { SileroTtsProvider } from '../../tts/silerotts.js'
+import { CoquiTtsProvider } from '../../tts/coqui.js'
+import { SystemTtsProvider } from '../../tts/system.js'
+import { NovelTtsProvider } from '../../tts/novel.js'
+import { translate } from '../../translate/index.js'
 
 // Keep track of where your extension is located, name should match repo name
 const extensionName = "p0rn-director";
@@ -24,24 +30,95 @@ const defaultSettings = {
 	first_words: 'Scenario: {{char}} is giving {{user}} step by step instructions as follows:'
 };
 
+registerSlashCommand("stopandthank", commandFunction, ["Jerk off instruction"], "Your character is giving you detailed instructions /help", true, true);
+
+registerSlashCommand("countandthank", countFunction, ["Jerk off instruction"], "Your character is giving you detailed instructions /help", true, true);
+
+
+
 var list = [];
 
 var notes = [];
 
-var currentCount = 0;
+var last = 0;
 
-var startTime=0;
+var readyToSwitch = false;
+
+var startTime = 0;
 
 eventSource.on(event_types.MESSAGE_RECEIVED, handleIncomingMessage);
 
+var countTo;
+var currentCount;
+
+var wait=false;
+
+async function commandFunction(args, time) {
+	wait=true;
+	var wait = args[0];
+	sleep(time * 1000).then(() => {if(wait)talk("You can stop now and thank me.") });
+}
+
+async function countFunction(args, count) {
+	countTo = count;
+	currentCount = 0;
+	sleep(20000).then(() => { counting() });
+}
+
+async function counting(args, count) {
+	
+	if(countTo<0)
+		return;
+	
+	currentCount++;
+	talk(translateNumer(currentCount));
+	if (currentCount <= countTo)
+		sleep(random(10000, 20000)).then(() => { counting() });
+	else
+		talk("You can stop now and thank me.")
+}
+
+const single_digit = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
+const double_digit = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
+const below_hundred = ['Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+
+function translateNumer(n) {
+	var word = ""
+	if (n < 10) {
+		word = single_digit[n] + ' '
+	}
+	else if (n < 20) {
+		word = double_digit[n - 10] + ' '
+	}
+	else if (n < 100) {
+		var rem = translateNumer(n % 10)
+		word = below_hundred[(n - n % 10) / 10 - 2] + ' ' + rem
+	}
+	else if (n < 1000) {
+		word = single_digit[Math.trunc(n / 100)] + ' Hundred ' + translateNumer(n % 100)
+	}
+	else if (n < 1000000) {
+		word = translateNumer(parseInt(n / 1000)).trim() + ' Thousand ' + translateNumer(n % 1000)
+	}
+	else if (n < 1000000000) {
+		word = translateNumer(parseInt(n / 1000000)).trim() + ' Million ' + translateNumer(n % 1000000)
+	}
+	else {
+		word = translateNumer(parseInt(n / 1000000000)).trim() + ' Billion ' + translateNumer(n % 1000000000)
+	}
+	return word;
+}
+
 async function handleIncomingMessage(data) {
+
+	countTo=-1;
+	wait=false;
 
 	if (extension_settings[extensionName].enabled === true) {
 		const context = getContext();
 		const chat = context.chat;
 		const message = structuredClone(chat[chat.length - 1]).mes;
 
-		currentCount = currentCount + 1;
 
 		if (chat.length === 1)
 			init();
@@ -52,33 +129,35 @@ async function handleIncomingMessage(data) {
 
 				const resultText = item.content;
 
-				var count = parseInt(resultText.substring(0, resultText.indexOf('.'))) - 2;
+				var count = parseInt(resultText.substring(0, resultText.indexOf('.')));
 
-				if (currentCount >= count) {
-					var action = actionMap.get(resultText);
-					actionMap.delete(resultText);
-					if (!(action === undefined)) {
-						executeSlashCommands(action);
-					}
+				if (count == last - 1)
+					readyToSwitch = true;
 
-					if (notes.length > 1) {
+				var action = actionMap.get(resultText);
 
-						const notesTexts = notes[0].split('\n');
-						if (resultText.localeCompare(notesTexts[notesTexts.length - 1]) == 0) {
-							notes.shift();
-							
-							var now = new Date();
-							var duration = (now.valueOf()-startTime)/60000;
-							if(duration>extension_settings[extensionName].max_duration)
-								while(notes.length>1)
-									notes.shift();
-							
-							addMessages(notes[0]);
-							$('#extension_floating_prompt').val(notes[0]).trigger('input');
-						}
-
-					}
+				if (!(action === undefined)) {
+					executeSlashCommands(action);
 				}
+
+				if (notes.length > 1) {
+
+					const notesTexts = notes[0].split('\n');
+					if (readyToSwitch && resultText.localeCompare(notesTexts[notesTexts.length - 1]) == 0) {
+						notes.shift();
+
+						var now = new Date();
+						var duration = (now.valueOf() - startTime) / 60000;
+						if (duration > extension_settings[extensionName].max_duration)
+							while (notes.length > 1)
+								notes.shift();
+
+						addMessages(notes[0]);
+						$('#extension_floating_prompt').val(notes[0]).trigger('input');
+					}
+
+				}
+
 			});
 
 		}
@@ -103,16 +182,8 @@ function formatNote(rawText) {
 	var message = ''
 
 	text.split('\n').forEach((m) => {
-		var i = m.indexOf('{{action:');
-		if (i > -1) {
-			var j = m.indexOf('}}');
-			var n = m.substring(0, i) + m.substring(j + 2);
-			var action = m.substring(i + 9, j).trim();
-			actionMap.set(n, action);
-			m = n;
-		}
-
-		i = m.indexOf('{{choose:');
+		
+		var i = m.indexOf('{{choose:');
 		if (i > -1) {
 			var j = m.indexOf('}}');
 
@@ -123,21 +194,29 @@ function formatNote(rawText) {
 			m = n;
 		}
 
+		
+		i = m.indexOf('{{action:');
+		if (i > -1) {
+			var j = m.indexOf('}}');
+			var n = m.substring(0, i) + m.substring(j + 2);
+			var action = m.substring(i + 9, j).trim();
+			actionMap.set(n, action);
+			m = n;
+		}
+
 		message = message + m;
 		if (!m.endsWith(']'))
 			message = message + "\n";
 	});
 
-	currentCount = 0;
-
 	return message;
 }
 
 async function init() {
-	
+
 	const now = new Date();
 	startTime = now.valueOf();
-	
+
 	const response = await fetch('/api/worldinfo/get', {
 		method: 'POST',
 		headers: getRequestHeaders(),
@@ -148,6 +227,10 @@ async function init() {
 	list = [];
 
 	notes = [];
+
+	last = 0;
+
+	readyToSwitch = false;
 
 	actionMap.clear();
 
@@ -261,10 +344,6 @@ async function addMessages(note) {
 
 	url.pathname = '/api/chromadb';
 
-	const context = getContext();
-	const chat = context.chat;
-	const message = structuredClone(chat[chat.length - 1]).mes;
-
 	let splitMessages = [];
 
 	let id = 0;
@@ -282,6 +361,9 @@ async function addMessages(note) {
 				meta: JSON.stringify(m),
 			});
 	});
+
+	last = id - 1;
+
 
 	// no messages to add
 	if (splitMessages.length === 0) {
@@ -321,6 +403,8 @@ async function queryMessages(query) {
 	return [];
 }
 
+
+
 async function setPornScript(name) {
 	if (!name) {
 		return;
@@ -328,6 +412,78 @@ async function setPornScript(name) {
 
 	extension_settings[extensionName].script = name;
 	saveSettingsDebounced();
+}
+
+
+let ttsProviders = {
+	ElevenLabs: ElevenLabsTtsProvider,
+	Silero: SileroTtsProvider,
+	System: SystemTtsProvider,
+	Coqui: CoquiTtsProvider,
+	Novel: NovelTtsProvider,
+}
+
+const provider = new ttsProviders[extension_settings.tts.currentProvider]
+
+let storedvalue = false;
+
+async function talk(text) {
+
+	if (extension_settings.translate.auto_mode === 'both' || extension_settings.translate.auto_mode === 'responses')
+		text = await translate(text, extension_settings.translate.target_language);
+
+	const response = await provider.generateTts(text, provider.settings.voiceMap[getContext().name2]);
+
+	const audioData = await response.blob();
+	//		if (!(audioData.type in ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/webm'])) {
+	//			throw `TTS received HTTP response with invalid data format. Expecting audio/mpeg, got ${audioData.type}`
+	//		}
+	playAudioData(audioData);
+
+}
+
+function ended() {
+	talkingAnimation(false)
+}
+
+function talkingAnimation(switchValue) {
+	if (!modules.includes('talkinghead')) {
+		console.debug("Talking Animation module not loaded");
+		return;
+	}
+
+	const apiUrl = getApiUrl();
+	const animationType = switchValue ? "start" : "stop";
+
+	if (switchValue !== storedvalue) {
+		try {
+			console.log(animationType + " Talking Animation");
+			doExtrasFetch(`${apiUrl}/api/talkinghead/${animationType}_talking`);
+			storedvalue = switchValue; // Update the storedvalue to the current switchValue
+		} catch (error) {
+			// Handle the error here or simply ignore it to prevent logging
+		}
+	}
+}
+
+let audioElement = new Audio()
+audioElement.autoplay = true
+
+
+async function playAudioData(audioBlob) {
+
+	const reader = new FileReader()
+	reader.onload = function(e) {
+		const srcUrl = e.target.result
+		audioElement.src = srcUrl.toString();
+	}
+	reader.readAsDataURL(audioBlob)
+	audioElement.addEventListener('ended', ended)
+	audioElement.addEventListener('canplay', () => {
+		talkingAnimation(true);
+		console.debug(`Starting TTS playback`)
+		audioElement.play()
+	})
 }
 
 
@@ -355,7 +511,7 @@ async function loadSettings() {
 }
 
 function onFirstWords() {
-	extension_settings[extensionName].first_words = $('#porn_editor_first_words').val().trim();
+	extension_settings[extensionName].first_words = $('#porn_editor_first_words').val().toString().trim();
 	saveSettingsDebounced();
 }
 
@@ -376,6 +532,8 @@ function onEnabled(event) {
 // This function is called when the extension is loaded
 jQuery(async () => {
 
+	provider.loadSettings(extension_settings.tts[extension_settings.tts.currentProvider]);
+
 	// This is an example of loading HTML from a file
 	const settingsHtml = await $.get(`${extensionFolderPath}/director.html`);
 
@@ -385,7 +543,7 @@ jQuery(async () => {
 	$("#extensions_settings").append(settingsHtml);
 
 	$("#enabled_setting").on("input", onEnabled);
-	
+
 	$('#porn_duration').on('input', onPornDurationInput);
 
 	$('#porn_editor_select').on('change', async () => {
