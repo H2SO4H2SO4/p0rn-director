@@ -30,7 +30,7 @@ const defaultSettings = {
 	first_words: 'Scenario: {{char}} is giving {{user}} step by step instructions as follows:'
 };
 
-registerSlashCommand("stopandthank", commandFunction, ["Jerk off instruction"], "Your character is giving you detailed instructions /help", true, true);
+registerSlashCommand("stopandthank", stopandthankFunction, ["Jerk off instruction"], "Your character is giving you detailed instructions /help", true, true);
 
 registerSlashCommand("countandthank", countFunction, ["Jerk off instruction"], "Your character is giving you detailed instructions /help", true, true);
 
@@ -40,9 +40,7 @@ var list = [];
 
 var notes = [];
 
-var last = 0;
-
-var readyToSwitch = false;
+var receivedForNote = 0;
 
 var startTime = 0;
 
@@ -51,31 +49,38 @@ eventSource.on(event_types.MESSAGE_RECEIVED, handleIncomingMessage);
 var countTo;
 var currentCount;
 
-var wait=false;
+var wait = false;
 
-async function commandFunction(args, time) {
-	wait=true;
-	var wait = args[0];
-	sleep(time * 1000).then(() => {if(wait)talk("You can stop now and thank me.") });
+function stopandthankFunction(args, time) {
+	
+	talk("I will let you know when you can stop");
+	wait = true;
+	sleep(time * 1000).then(() => { if (wait) talk("You can stop now and thank me.") });
 }
 
-async function countFunction(args, count) {
+function countFunction(args, count) {
 	countTo = count;
 	currentCount = 0;
-	sleep(20000).then(() => { counting() });
+	counting();
 }
 
 async function counting(args, count) {
-	
-	if(countTo<0)
+
+	if (countTo < 0)
 		return;
-	
-	currentCount++;
-	talk(translateNumer(currentCount));
-	if (currentCount <= countTo)
-		sleep(random(10000, 20000)).then(() => { counting() });
+
+	if (currentCount === 0) {
+		talk("Let me count for you.");
+		sleep(random(2000, 5000)).then(() => { counting() });
+	}
+	else if (currentCount <= countTo) {
+		var text = translateNumer(currentCount) + ".";
+		talk(text);
+		sleep(random(2000, 5000)).then(() => { counting() });
+	}
 	else
 		talk("You can stop now and thank me.")
+	currentCount++;
 }
 
 const single_digit = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
@@ -111,13 +116,16 @@ function translateNumer(n) {
 
 async function handleIncomingMessage(data) {
 
-	countTo=-1;
-	wait=false;
+	countTo = -1;
+	wait = false;
+	receivedForNote++;
+
+	const context = getContext();
+	const chat = context.chat;
+	const message = structuredClone(chat[chat.length - 1]).mes;
+
 
 	if (extension_settings[extensionName].enabled === true) {
-		const context = getContext();
-		const chat = context.chat;
-		const message = structuredClone(chat[chat.length - 1]).mes;
 
 
 		if (chat.length === 1)
@@ -129,23 +137,25 @@ async function handleIncomingMessage(data) {
 
 				const resultText = item.content;
 
-				var count = parseInt(resultText.substring(0, resultText.indexOf('.')));
+				console.log(">>>found " + resultText)
 
-				if (count == last - 1)
-					readyToSwitch = true;
+				var count = parseInt(resultText.substring(0, resultText.indexOf('.')));
 
 				var action = actionMap.get(resultText);
 
-				if (!(action === undefined)) {
-					executeSlashCommands(action);
+				if (receivedForNote>(count/2) && !(action === undefined)) {
+
+					console.log("start action " + action)
+
+					waitForMessage(action);
 				}
 
 				if (notes.length > 1) {
 
 					const notesTexts = notes[0].split('\n');
-					if (readyToSwitch && resultText.localeCompare(notesTexts[notesTexts.length - 1]) == 0) {
+					if (receivedForNote>(notesTexts.length/2) && resultText.localeCompare(notesTexts[notesTexts.length - 1]) == 0) {
 						notes.shift();
-
+						receivedForNote==0;
 						var now = new Date();
 						var duration = (now.valueOf() - startTime) / 60000;
 						if (duration > extension_settings[extensionName].max_duration)
@@ -182,7 +192,7 @@ function formatNote(rawText) {
 	var message = ''
 
 	text.split('\n').forEach((m) => {
-		
+
 		var i = m.indexOf('{{choose:');
 		if (i > -1) {
 			var j = m.indexOf('}}');
@@ -194,7 +204,17 @@ function formatNote(rawText) {
 			m = n;
 		}
 
-		
+		var i = m.indexOf('{{count:');
+		if (i > -1) {
+			var j = m.indexOf('}}');
+			var n = m.substring(0, i) + m.substring(j + 2);
+			var nTranslate = m.substring(i + 8, j).trim();
+			var n = m.substring(0, i) + translateNumer(nTranslate) + m.substring(j + 2);
+			actionMap.set(n, "/countandthank " + nTranslate);
+			m = n;
+		}
+
+
 		i = m.indexOf('{{action:');
 		if (i > -1) {
 			var j = m.indexOf('}}');
@@ -228,9 +248,7 @@ async function init() {
 
 	notes = [];
 
-	last = 0;
-
-	readyToSwitch = false;
+	receivedForNote = 0;
 
 	actionMap.clear();
 
@@ -362,24 +380,24 @@ async function addMessages(note) {
 			});
 	});
 
-	last = id - 1;
-
-
 	// no messages to add
 	if (splitMessages.length === 0) {
 		return { count: 0 };
 	}
 
-	const addMessagesResult = await doExtrasFetch(url, {
-		method: 'POST',
-		headers: postHeaders,
-		body: JSON.stringify({ "chat_id": "p0rn director", messages: splitMessages }),
-	});
+	try {
+		const addMessagesResult = await doExtrasFetch(url, {
+			method: 'POST',
+			headers: postHeaders,
+			body: JSON.stringify({ "chat_id": "p0rn director", messages: splitMessages }),
+		});
 
-	if (addMessagesResult.ok) {
-		const addMessagesData = await addMessagesResult.json();
-		return addMessagesData; // { count: 1 }
+		if (addMessagesResult.ok) {
+			const addMessagesData = await addMessagesResult.json();
+			return addMessagesData; // { count: 1 }
+		}
 	}
+	catch (error) { };
 
 	return { count: 0 };
 }
@@ -426,6 +444,9 @@ let ttsProviders = {
 const provider = new ttsProviders[extension_settings.tts.currentProvider]
 
 let storedvalue = false;
+let audioElement = new Audio()
+audioElement.autoplay = true
+
 
 async function talk(text) {
 
@@ -435,10 +456,32 @@ async function talk(text) {
 	const response = await provider.generateTts(text, provider.settings.voiceMap[getContext().name2]);
 
 	const audioData = await response.blob();
-	//		if (!(audioData.type in ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/webm'])) {
-	//			throw `TTS received HTTP response with invalid data format. Expecting audio/mpeg, got ${audioData.type}`
-	//		}
-	playAudioData(audioData);
+	const reader = new FileReader()
+	reader.onload = function(e) {
+		const srcUrl = e.target.result
+		audioElement.src = srcUrl.toString();
+	}
+	reader.readAsDataURL(audioData)
+	audioElement.addEventListener('ended', ended)
+	audioElement.addEventListener('canplay', () => {
+		talkingAnimation(true);
+		console.debug(`Starting TTS playback`)
+		audioElement.play()
+	})
+
+}
+
+
+
+async function waitForMessage(action) {
+
+	sleep(2000).then(() => {
+		const temp = $('#tts_media_control')[0].className;
+		if (temp.indexOf('play') === -1)
+			waitForMessage(action);
+		else
+			executeSlashCommands(action);
+	});
 
 }
 
@@ -464,26 +507,6 @@ function talkingAnimation(switchValue) {
 			// Handle the error here or simply ignore it to prevent logging
 		}
 	}
-}
-
-let audioElement = new Audio()
-audioElement.autoplay = true
-
-
-async function playAudioData(audioBlob) {
-
-	const reader = new FileReader()
-	reader.onload = function(e) {
-		const srcUrl = e.target.result
-		audioElement.src = srcUrl.toString();
-	}
-	reader.readAsDataURL(audioBlob)
-	audioElement.addEventListener('ended', ended)
-	audioElement.addEventListener('canplay', () => {
-		talkingAnimation(true);
-		console.debug(`Starting TTS playback`)
-		audioElement.play()
-	})
 }
 
 
