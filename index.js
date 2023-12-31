@@ -1,7 +1,7 @@
 //You'll likely need to import extension_settings, getContext, and loadExtensionSettings from extensions.js
 import { doExtrasFetch, extension_settings, getApiUrl, getContext, modules } from "../../../extensions.js";
 import { eventSource, event_types, getRequestHeaders, saveSettingsDebounced, substituteParams, chat_metadata } from "../../../../script.js";
-import { world_names } from "../../../world-info.js";
+import { world_names, importWorldInfo } from "../../../world-info.js";
 import { executeSlashCommands, registerSlashCommand } from '../../../slash-commands.js';
 import { ElevenLabsTtsProvider } from '../../tts/elevenlabs.js'
 import { SileroTtsProvider } from '../../tts/silerotts.js'
@@ -23,7 +23,7 @@ const postHeaders = {
 const defaultSettings = {
 
 	enabled: false,
-	script: 'Porn Director',
+	script: 'P0rn Director',
 	max_duration: 60,
 	opening: 'Opening',
 	closing: 'Closing',
@@ -52,7 +52,7 @@ var currentCount;
 var wait = false;
 
 function stopandthankFunction(args, time) {
-	
+
 	talk("I will let you know when you can stop");
 	wait = true;
 	sleep(time * 1000).then(() => { if (wait) talk("You can stop now and thank me.") });
@@ -143,7 +143,7 @@ async function handleIncomingMessage(data) {
 
 				var action = actionMap.get(resultText);
 
-				if (receivedForNote>(count/2) && !(action === undefined)) {
+				if (receivedForNote > (count / 2) && !(action === undefined)) {
 
 					console.log("start action " + action)
 
@@ -153,9 +153,9 @@ async function handleIncomingMessage(data) {
 				if (notes.length > 1) {
 
 					const notesTexts = notes[0].split('\n');
-					if (receivedForNote>(notesTexts.length/2) && resultText.localeCompare(notesTexts[notesTexts.length - 1]) == 0) {
+					if (receivedForNote > (notesTexts.length / 2) && resultText.localeCompare(notesTexts[notesTexts.length - 1]) == 0) {
 						notes.shift();
-						receivedForNote==0;
+						receivedForNote == 0;
 						var now = new Date();
 						var duration = (now.valueOf() - startTime) / 60000;
 						if (duration > extension_settings[extensionName].max_duration)
@@ -522,6 +522,7 @@ async function loadSettings() {
 	$('#porn_duration').val(extension_settings[extensionName].max_duration).trigger('input');
 
 
+
 	world_names.forEach((item, i) => {
 		$('#porn_editor_select').append(`<option value='${i}'${extension_settings[extensionName].script.includes(item) ? ' selected' : ''}>${item}</option>`);
 		setPornScript(extension_settings[extensionName].script)
@@ -552,8 +553,16 @@ function onEnabled(event) {
 }
 
 
+
 // This function is called when the extension is loaded
 jQuery(async () => {
+
+	if (!world_names.includes('P0rn Director')) {
+
+		let blob = await fetch(extensionFolderPath+"/lore/P0rn Director.json").then(r => r.blob());
+		const file = new File([blob], "P0rn Director.json")
+		importWorldInfo(file);
+	}
 
 	provider.loadSettings(extension_settings.tts[extension_settings.tts.currentProvider]);
 
