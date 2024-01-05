@@ -111,7 +111,7 @@ function translateNumer(n) {
 	else {
 		word = translateNumer(parseInt(n / 1000000000)).trim() + ' Billion ' + translateNumer(n % 1000000000)
 	}
-	return word;
+	return word.toLowerCase();
 }
 
 async function handleIncomingMessage(data) {
@@ -133,13 +133,17 @@ async function handleIncomingMessage(data) {
 		else {
 			const result = await queryMessages(message);
 
-			result.forEach((item, i) => {
+			result.forEach((item) => {
 
 				const resultText = item.content;
 
-				console.log(">>>found " + resultText)
 
 				var count = parseInt(resultText.substring(0, resultText.indexOf('.')));
+
+				console.log(">>>found " + resultText)
+				console.log(">>>receivedForNote " + receivedForNote)
+				console.log(">>>count " + count)
+				console.log(">>>notes.length " + notes.length)
 
 				var action = actionMap.get(resultText);
 
@@ -153,9 +157,13 @@ async function handleIncomingMessage(data) {
 				if (notes.length > 1) {
 
 					const notesTexts = notes[0].split('\n');
-					if (receivedForNote > (notesTexts.length / 2) && resultText.localeCompare(notesTexts[notesTexts.length - 1]) == 0) {
+					
+					console.log(">>>notesTexts.length " + notesTexts.length)
+					
+					if (receivedForNote > (notesTexts.length / 2) && resultText.localeCompare(notesTexts[notesTexts.length - 1]) === 0) {
+						
 						notes.shift();
-						receivedForNote == 0;
+						receivedForNote = 0;
 						var now = new Date();
 						var duration = (now.valueOf() - startTime) / 60000;
 						if (duration > extension_settings[extensionName].max_duration)
@@ -279,6 +287,8 @@ async function init() {
 							notes.push(entry.content);
 						}
 					}
+					else
+						notes.push(entry.content);
 				}
 			}
 
