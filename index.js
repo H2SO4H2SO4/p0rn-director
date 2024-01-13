@@ -45,11 +45,15 @@ var receivedForNote = 0;
 var startTime = 0;
 
 eventSource.on(event_types.MESSAGE_RECEIVED, handleIncomingMessage);
+eventSource.on(event_types.USER_MESSAGE_RENDERED, handleOutgoingMessage);
 
 var countTo;
 var currentCount;
 
 var wait = false;
+
+var cleanupIndex = -1;
+var checkForCleanup = false;
 
 function stopandthankFunction(args, time) {
 
@@ -114,6 +118,29 @@ function translateNumer(n) {
 	return word.toLowerCase();
 }
 
+async function handleOutgoingMessage(data) {
+
+	const context = getContext();
+	const chat = context.chat;
+
+	if (checkForCleanup == true) {
+
+		if (cleanupIndex > 0) {
+			console.log(">>>before splice " + chat.length)
+			const cleanUp = cleanupIndex;
+			cleanupIndex = chat.length-cleanupIndex;
+			//chat.splice(0, cleanupIndex);
+			executeSlashCommands("/cut 1-"+cleanUp);
+			console.log(">>>before splice " + chat.length)
+		}
+		else
+			cleanupIndex = chat.length-2;
+		
+		checkForCleanup=false;
+	}
+
+}
+
 async function handleIncomingMessage(data) {
 
 	countTo = -1;
@@ -140,12 +167,14 @@ async function handleIncomingMessage(data) {
 
 				var count = parseInt(resultText.substring(0, resultText.indexOf('.')));
 
-				console.log(">>>found " + resultText)
-				console.log(">>>receivedForNote " + receivedForNote)
-				console.log(">>>count " + count)
-				console.log(">>>notes.length " + notes.length)
+								console.log(">>>found " + resultText)
+								console.log(">>>receivedForNote " + receivedForNote)
+								console.log(">>>count " + count)
+								console.log(">>>notes.length " + notes.length)
 
 				var action = actionMap.get(resultText);
+				
+				console.log(">>>action " + action)
 
 				if (receivedForNote > (count / 2) && !(action === undefined)) {
 
@@ -157,13 +186,15 @@ async function handleIncomingMessage(data) {
 				if (notes.length > 1) {
 
 					const notesTexts = notes[0].split('\n');
-					
-					console.log(">>>notesTexts.length " + notesTexts.length)
-					
+
+										console.log(">>>notesTexts.length " + notesTexts.length)
+
 					if (receivedForNote > (notesTexts.length / 2) && resultText.localeCompare(notesTexts[notesTexts.length - 1]) === 0) {
-						
+
 						notes.shift();
 						receivedForNote = 0;
+						checkForCleanup = true;
+
 						var now = new Date();
 						var duration = (now.valueOf() - startTime) / 60000;
 						if (duration > extension_settings[extensionName].max_duration)
@@ -339,12 +370,6 @@ async function init() {
 
 	$(`input[name="extension_floating_position"][value="0"]`).prop('checked', true).trigger('input');
 	chat_metadata['note_position'] = 0;
-}
-
-eventSource.on(event_types.MESSAGE_SENT, handleOutgoingMessage);
-
-function handleOutgoingMessage(data) {
-
 }
 
 async function addMessages(note) {
@@ -569,7 +594,7 @@ jQuery(async () => {
 
 	if (!world_names.includes('P0rn Director')) {
 
-		let blob = await fetch(extensionFolderPath+"/lore/P0rn Director.json").then(r => r.blob());
+		let blob = await fetch(extensionFolderPath + "/lore/P0rn Director.json").then(r => r.blob());
 		const file = new File([blob], "P0rn Director.json")
 		importWorldInfo(file);
 	}
